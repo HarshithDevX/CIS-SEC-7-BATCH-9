@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CIS-SEC-7-Team-9 — Pure Static Change Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:      #0b1224;
+  --bg2:     #111b2f;
+  --bg3:     #152246;
+  --bg4:     #1b2d4f;
+  --border:  rgba(255,255,255,0.08);
+  --border2: rgba(96,165,250,0.14);
+  --amber:   #f59e0b;
+  --amber2:  #fb7185;
+  --amberglow: rgba(245,158,11,0.18);
+  --green:   #34d399;
+  --greenglow: rgba(52,211,153,0.18);
+  --red:     #f87171;
+  --redglow: rgba(248,113,113,0.18);
+  --blue:    #60a5fa;
+  --text:    #e2e8f0;
+  --text2:   #94a3b8;
+  --text3:   #64748b;
+  --mono:    'IBM Plex Mono', monospace;
+  --sans:    'Outfit', sans-serif;
+  --display: 'Bebas Neue', sans-serif;
+  --r:       12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background: radial-gradient(circle at top left, rgba(96,165,250,0.12) 0%, transparent 30%),
+              radial-gradient(circle at top right, rgba(245,158,11,0.12) 0%, transparent 28%),
+              linear-gradient(180deg, #0b1224 0%, #101b30 100%);
+  color:var(--text);
+  font-family:var(--sans);min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* Scanline effect */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,rgba(15,23,42,0.02) 0px,rgba(15,23,42,0.02) 1px,transparent 1px,transparent 2px);
+}
+
+/* Grid background */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(96,165,250,0.14) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(251,113,133,0.14) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+
+.shell{display:flex;min-height:100vh;position:relative;z-index:1}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:230px;min-width:230px;
+  background: linear-gradient(180deg, #101b2e 0%, #0b1224 55%, #111b2f 100%);
+  border-right:1px solid rgba(255,255,255,0.06);
+  display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+  overflow:hidden;
+}
+.sidebar-top{
+  padding:24px 20px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.logo{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:4px;
+}
+.logo-mark{
+  width:32px;height:32px;flex-shrink:0;
+  background: linear-gradient(135deg, #60a5fa 0%, #f43f5e 100%);
+  clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+  box-shadow:0 0 26px rgba(96,165,250,0.28);
+  animation:hexPulse 3s ease-in-out infinite;
+}
+@keyframes hexPulse{0%,100%{box-shadow:0 0 20px rgba(245,158,11,0.5)}50%{box-shadow:0 0 35px rgba(245,158,11,0.8)}}
+.logo-name{
+  font-family:var(--display);
+  font-size:26px;letter-spacing:2px;
+  color:var(--text);line-height:1;
+}
+.logo-sub{
+  font-family:var(--mono);font-size:9px;
+  color:var(--text3);letter-spacing:3px;
+  text-transform:uppercase;
+  padding-left:42px;
+}
+
+.nav{padding:12px 0;flex:1}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 20px;
+  font-size:13px;font-weight:600;
+  color:var(--text2);cursor:pointer;
+  border:none;background:none;width:100%;
+  font-family:var(--sans);text-align:left;
+  border-left:2px solid transparent;
+  transition:all .15s;
+}
+.nav-item:hover{color:#ffffff;background:rgba(96,165,250,0.12);}
+.nav-item.active{
+  color:#ffffff;
+  border-left-color:#60a5fa;
+  background:linear-gradient(90deg, rgba(96,165,250,0.18), rgba(245,158,11,0.14));
+}
+.nav-item svg{flex-shrink:0;width:15px;height:15px}
+
+.sidebar-footer{
+  padding:16px 20px;
+  border-top:1px solid rgba(255,255,255,0.08);
+}
+.uptime-badge{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:10px;color:var(--text3);
+}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 8px var(--green);
+  animation:livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── MAIN ── */
+.main{flex:1;padding:32px;overflow-y:auto;max-width:1100px}
+
+/* ── PAGE HEADERS ── */
+.pg-head{
+  display:flex;align-items:flex-start;
+  justify-content:space-between;
+  margin-bottom:28px;gap:12px;
+}
+.pg-title{
+  font-family:var(--display);
+  font-size:38px;letter-spacing:2px;
+  line-height:1;color:var(--text);
+}
+.pg-sub{
+  font-family:var(--mono);font-size:11px;
+  color:var(--text3);margin-top:4px;
+  letter-spacing:0.5px;
+}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat{
+  background: linear-gradient(135deg, rgba(59,130,246,0.22), rgba(79,70,229,0.18));
+  border:1px solid rgba(96,165,250,0.18);
+  border-radius:var(--r);padding:18px 16px;
+  position:relative;overflow:hidden;
+  box-shadow:0 18px 45px rgba(8,18,40,0.3);
+}
+.stat:nth-child(2){background: linear-gradient(135deg, rgba(248,113,113,0.22), rgba(245,158,11,0.18));}
+.stat:nth-child(3){background: linear-gradient(135deg, rgba(34,211,238,0.22), rgba(168,85,247,0.18));}
+.stat:nth-child(4){background: linear-gradient(135deg, rgba(34,197,94,0.22), rgba(16,185,129,0.18));}
+.stat::before{
+  content:'';position:absolute;
+  top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.9),transparent);
+  opacity:0;transition:.3s;
+}
+.stat:hover::before{opacity:1}
+.stat-val{
+  font-family:var(--mono);font-size:32px;
+  font-weight:700;line-height:1;
+  margin-bottom:4px;
+}
+.stat-lbl{
+  font-family:var(--mono);font-size:9px;
+  color:#e2e8f0;text-transform:uppercase;
+  letter-spacing:1.5px;
+}
+
+/* ── BUTTONS ── */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:11px 20px;border-radius:999px;
+  font-size:13px;font-weight:700;
+  cursor:pointer;border:none;
+  font-family:var(--sans);transition:all .18s;
+  white-space:nowrap;text-decoration:none;
+}
+.btn-amber{
+  background: linear-gradient(135deg, #ff5cc5, #7c3aed);
+  color:#fff;
+  box-shadow:0 0 35px rgba(124,58,237,0.25);
+}
+.btn-amber:hover{background: linear-gradient(135deg, #60a5fa, #ff5cc5);box-shadow:0 0 35px rgba(96,165,250,0.3)}
+.btn-ghost{
+  background: rgba(15,25,48,0.8);color:var(--text);
+  border:1px solid rgba(96,165,250,0.16);
+}
+.btn-ghost:hover{color:#fff;border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.14)}
+.btn-danger{
+  background: linear-gradient(135deg, rgba(251,113,133,0.24), rgba(59,130,246,0.16));
+  color:#fff;
+  border:1px solid rgba(251,113,133,0.3);
+}
+.btn-danger:hover{background:rgba(251,113,133,0.25)}
+.btn-sm{padding:7px 14px;font-size:12px;border-radius:999px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── CARDS ── */
+.card{
+  background: rgba(15,25,48,0.96);
+  border:1px solid rgba(96,165,250,0.18);
+  border-radius:var(--r);padding:22px;
+  box-shadow:0 18px 40px rgba(0,0,0,0.24);
+}
+.card-title{
+  font-family:var(--mono);font-size:10px;
+  color:var(--text2);text-transform:uppercase;
+  letter-spacing:2px;margin-bottom:16px;
+}
+
+/* ── API KEY BANNER ── */
+.api-banner{
+  background: rgba(15,25,48,0.9);
+  border:1px solid rgba(96,165,250,0.18);
+  border-radius:var(--r);padding:14px 18px;
+  display:flex;align-items:center;gap:14px;
+  margin-bottom:20px;flex-wrap:wrap;
+}
+.api-banner-icon{font-size:20px;flex-shrink:0;color:#60a5fa}
+.api-banner-text{flex:1;min-width:200px}
+.api-banner-text strong{font-size:13px;color:#60a5fa;display:block;margin-bottom:2px}
+.api-banner-text span{font-size:11px;color:var(--text2);font-family:var(--mono)}
+
+/* ── BADGES ── */
+.badge{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:4px 10px;border-radius:999px;
+  font-family:var(--mono);font-size:9px;
+  font-weight:700;letter-spacing:1px;text-transform:uppercase;
+}
+.badge-major{background:rgba(248,113,113,0.18);color:#fee2e2;border:1px solid rgba(248,113,113,0.3)}
+.badge-minor{background:rgba(79,70,229,0.18);color:#e0e7ff;border:1px solid rgba(79,70,229,0.28)}
+.badge-none{background:rgba(52,211,153,0.18);color:#dcfce7;border:1px solid rgba(52,211,153,0.28)}
+.badge-active{background:rgba(96,165,250,0.18);color:#dbeafe;border:1px solid rgba(96,165,250,0.28)}
+.badge-paused{background:rgba(30,41,59,0.8);color:var(--text2);border:1px solid rgba(148,163,184,0.2)}
+
+/* ── SITE ROWS ── */
+.site-row{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.06);
+  cursor:pointer;transition:all .18s;
+}
+.site-row:last-child{border-bottom:none}
+.site-row:hover{padding-left:12px;background:rgba(96,165,250,0.14);}
+.site-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background: linear-gradient(135deg,#60a5fa,#a78bfa)}
+.site-info{flex:1;min-width:0}
+.site-name{font-size:14px;font-weight:700;color:#f8fafc}
+.site-url{
+  font-family:var(--mono);font-size:10px;
+  color:#7dd3fc;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;max-width:260px;
+}
+.site-meta{
+  font-family:var(--mono);font-size:10px;
+  color:var(--text3);margin-top:3px;
+}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;padding:64px 20px;color:var(--text3)}
+.empty-glyph{
+  font-family:var(--display);font-size:80px;
+  color:var(--border2);line-height:1;
+  margin-bottom:12px;letter-spacing:4px;
+}
+.empty h3{font-size:16px;color:var(--text2);margin-bottom:6px}
+.empty p{font-size:12px;font-family:var(--mono)}
+
+/* ── MODAL ── */
+.overlay{
+  position:fixed;inset:0;
+  background:rgba(6,6,8,0.88);
+  display:flex;align-items:center;justify-content:center;
+  z-index:1000;padding:20px;
+  backdrop-filter:blur(8px);
+  animation:fadeIn .15s ease;
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-radius:14px;padding:32px;
+  width:100%;max-width:520px;
+  box-shadow:0 32px 80px rgba(0,0,0,0.7),0 0 0 1px var(--border);
+  animation:slideUp .2s ease;
+}
+@keyframes slideUp{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.modal-title{
+  font-family:var(--display);
+  font-size:30px;letter-spacing:2px;
+  margin-bottom:4px;
+}
+.modal-sub{font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:24px}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:24px}
+
+/* ── FORMS ── */
+.fg{margin-bottom:15px}
+.fl{
+  display:block;font-family:var(--mono);
+  font-size:10px;font-weight:600;
+  color:var(--text3);margin-bottom:6px;
+  text-transform:uppercase;letter-spacing:1.5px;
+}
+.fi,.fs{
+  width:100%;background:var(--bg3);
+  border:1px solid var(--border2);
+  border-radius:var(--r);padding:10px 14px;
+  color:var(--text);font-size:13px;
+  font-family:var(--sans);outline:none;
+  transition:border-color .15s;
+}
+.fi:focus,.fs:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amberglow)}
+.fi::placeholder{color:var(--text3)}
+.fs option{background:var(--bg3)}
+
+/* ── TABS ── */
+.tabs{
+  display:flex;border-bottom:1px solid var(--border);
+  margin-bottom:22px;
+}
+.tab{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:10px 18px;background:none;border:none;
+  cursor:pointer;font-size:13px;font-weight:600;
+  font-family:var(--sans);color:var(--text3);
+  border-bottom:2px solid transparent;
+  margin-bottom:-1px;transition:all .15s;
+}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--amber);border-bottom-color:var(--amber)}
+
+/* ── DIFF ── */
+.diff-stats{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.diff-stat{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r);padding:14px 16px;
+  flex:1;min-width:100px;
+}
+.diff-stat-val{
+  font-family:var(--mono);font-size:26px;
+  font-weight:700;line-height:1;
+}
+.diff-stat-lbl{
+  font-family:var(--mono);font-size:9px;
+  color:var(--text3);text-transform:uppercase;
+  letter-spacing:1px;margin-top:3px;
+}
+.diff-block{
+  margin-bottom:8px;border-radius:var(--r);
+  overflow:hidden;border:1px solid var(--border);
+}
+.diff-hdr{
+  padding:5px 12px;font-family:var(--mono);
+  font-size:9px;background:var(--bg3);
+  letter-spacing:1px;text-transform:uppercase;
+}
+.diff-line{
+  padding:3px 12px;font-family:var(--mono);
+  font-size:11px;line-height:1.8;
+  white-space:pre-wrap;word-break:break-all;
+}
+.diff-add{background:rgba(16,185,129,0.07);color:#6ee7b7}
+.diff-add::before{content:'+ ';color:var(--green)}
+.diff-del{background:rgba(239,68,68,0.07);color:#fca5a5}
+.diff-del::before{content:'− ';color:var(--red)}
+.ai-box{
+  background:var(--amberglow);
+  border:1px solid rgba(245,158,11,0.2);
+  border-radius:var(--r);padding:14px 16px;
+  margin-bottom:18px;
+}
+.ai-lbl{
+  font-family:var(--mono);font-size:9px;
+  color:var(--amber);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:5px;
+}
+.ai-text{font-size:13px;color:var(--text2);line-height:1.6}
+
+/* ── TIMELINE ── */
+.tl-item{
+  display:flex;gap:14px;padding:12px 0;
+  border-bottom:1px solid var(--border);
+}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.tl-body{flex:1}
+.tl-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.tl-time{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.tl-sum{font-size:12px;color:var(--text2);line-height:1.5;margin-top:3px}
+.tl-nums{
+  display:flex;gap:12px;margin-top:4px;
+  font-family:var(--mono);font-size:9px;
+}
+.pct-bar{display:flex;align-items:center;gap:8px;margin:4px 0}
+.pct-track{flex:1;height:2px;background:var(--bg4);border-radius:1px}
+.pct-fill{height:100%;border-radius:1px;transition:width .5s}
+.pct-num{font-family:var(--mono);font-size:9px;min-width:30px}
+
+/* ── CHIPS ── */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.chip{
+  padding:4px 12px;border-radius:20px;
+  font-family:var(--mono);font-size:10px;
+  font-weight:600;cursor:pointer;
+  border:1px solid var(--border2);
+  background:var(--bg3);color:var(--text3);
+  transition:all .15s;letter-spacing:0.5px;
+}
+.chip.active{background:var(--amber);color:#000;border-color:var(--amber)}
+.chip:hover:not(.active){border-color:var(--amber);color:var(--amber)}
+
+/* ── DETAIL HEADER ── */
+.dh{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r);padding:20px;
+  margin-bottom:22px;display:flex;
+  gap:16px;align-items:flex-start;flex-wrap:wrap;
+}
+.dh-icon{
+  width:44px;height:44px;border-radius:8px;
+  background:var(--amberglow);
+  border:1px solid rgba(245,158,11,0.25);
+  display:flex;align-items:center;
+  justify-content:center;font-size:20px;
+  flex-shrink:0;
+}
+.dh-info{flex:1}
+.dh-name{
+  font-family:var(--display);font-size:24px;
+  letter-spacing:1px;line-height:1;margin-bottom:3px;
+}
+.dh-url{
+  font-family:var(--mono);font-size:10px;
+  color:var(--amber);
+}
+.dh-meta{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap}
+.dh-meta-item label{
+  display:block;font-family:var(--mono);
+  font-size:8px;color:var(--text3);
+  text-transform:uppercase;letter-spacing:1.5px;
+  margin-bottom:3px;
+}
+.dh-acts{display:flex;gap:7px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start}
+
+/* ── SPINNER ── */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{
+  width:16px;height:16px;border:2px solid var(--border2);
+  border-top-color:var(--amber);border-radius:50%;
+  animation:spin .6s linear infinite;display:inline-block;
+}
+
+/* ── TOAST ── */
+#toasts{
+  position:fixed;bottom:24px;right:24px;
+  z-index:9999;display:flex;flex-direction:column;gap:8px;
+}
+.toast{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--r);padding:11px 16px;
+  font-size:12px;font-weight:600;
+  display:flex;align-items:center;gap:8px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  animation:slideToast .2s ease;max-width:300px;
+  font-family:var(--mono);
+}
+@keyframes slideToast{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+.t-ok{border-left:2px solid var(--green)}
+.t-err{border-left:2px solid var(--red)}
+.t-info{border-left:2px solid var(--amber)}
+
+/* ── COMPARE BAR ── */
+.cmp-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.cmp-bar select{flex:1;min-width:150px}
+
+/* ── PROGRESS ── */
+.checking-bar{
+  height:2px;background:var(--bg3);
+  border-radius:1px;margin-bottom:16px;
+  overflow:hidden;
+}
+.checking-fill{
+  height:100%;width:0;
+  background:linear-gradient(90deg,var(--amber),var(--amber2));
+  transition:width .4s ease;
+  box-shadow:0 0 8px var(--amber);
+}
+
+/* ── SETUP WIZARD ── */
+.wizard{
+  max-width:520px;margin:80px auto;text-align:center;
+}
+.wizard-logo{
+  font-family:var(--display);font-size:64px;
+  letter-spacing:4px;color:var(--text);
+  margin-bottom:8px;
+}
+.wizard-logo span{color:var(--amber)}
+.wizard-sub{
+  font-family:var(--mono);font-size:11px;
+  color:var(--text3);letter-spacing:2px;
+  margin-bottom:40px;
+}
+.wizard-step{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:var(--r);padding:20px;
+  margin-bottom:14px;text-align:left;
+}
+.wizard-step-num{
+  font-family:var(--mono);font-size:9px;
+  color:var(--amber);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:6px;
+}
+.wizard-step h3{font-size:15px;font-weight:700;margin-bottom:6px}
+.wizard-step p{font-size:12px;color:var(--text3);line-height:1.6;font-family:var(--mono)}
+
+@media(max-width:700px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .sidebar{width:56px;min-width:56px}
+  .logo-name,.logo-sub,.nav-item span,.sidebar-footer{display:none}
+  .main{padding:18px}
+}
+</style>
+</head>
+<body>
+
+<div id="toasts"></div>
+
+<!-- SETUP WIZARD (shown before API key set) -->
+<div id="setup-page" style="display:none;position:relative;z-index:1;padding:20px">
+  <div class="wizard">
+    <div class="wizard-logo">WEB<span>WATCH</span></div>
+    <div class="wizard-sub">PURE STATIC · ZERO BACKEND · 24/7</div>
+    <div class="wizard-step">
+      <div class="wizard-step-num">Step 01 — Required</div>
+      <h3>Enter your Anthropic API Key</h3>
+      <p>Used for AI change classification. Stored only in your browser (localStorage). Get one free at console.anthropic.com</p>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <input class="fi" id="setup-key" type="password" placeholder="sk-ant-api03-..." style="flex:1"/>
+        <button class="btn btn-amber" onclick="saveApiKey()">Save Key →</button>
+      </div>
+    </div>
+    <div class="wizard-step">
+      <div class="wizard-step-num">Step 02 — Optional (skip if not needed)</div>
+      <h3>How AI Classification Works</h3>
+      <p>Without a key: rule-based classification (fast, works offline)<br/>With a key: Claude AI classifies every change as MAJOR or MINOR with a human-readable reason.</p>
+    </div>
+    <div class="wizard-step">
+      <div class="wizard-step-num">Step 03 — How it works</div>
+      <h3>100% Browser-based, No Backend</h3>
+      <p>• Pages fetched via public CORS proxy (allorigins.win)<br/>• All snapshots stored in your browser's localStorage<br/>• Diff computed in pure JavaScript<br/>• Host on GitHub Pages / Netlify for 24/7 access</p>
+    </div>
+    <button class="btn btn-ghost" onclick="skipSetup()" style="margin-top:8px;width:100%;justify-content:center">
+      Skip — use rule-based classification (no key needed)
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none">
+  <div class="shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="logo">
+          <div class="logo-mark"></div>
+          <div class="logo-name">CIS-SEC-7-TEAM-9</div>
+        </div>
+        <div class="logo-sub">CHANGE DETECTION</div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" id="nav-dash" onclick="showPage('dash')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" onclick="openAdd()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          <span>Add Site</span>
+        </button>
+        <button class="nav-item" id="nav-settings" onclick="showPage('settings')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="uptime-badge">
+          <div class="live-dot"></div>
+          <span>STATIC · NO SERVER</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+
+      <!-- DASHBOARD -->
+      <div id="page-dash">
+        <div class="pg-head">
+          <div>
+            <div class="pg-title">DASHBOARD</div>
+            <div class="pg-sub" id="dash-sub">LOADING...</div>
+          </div>
+          <button class="btn btn-amber" onclick="openAdd()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            ADD SITE
+          </button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-val" id="s0">0</div><div class="stat-lbl">Total Sites</div></div>
+          <div class="stat"><div class="stat-val" id="s1" style="color:var(--red)">0</div><div class="stat-lbl">⚠ Major</div></div>
+          <div class="stat"><div class="stat-val" id="s2" style="color:var(--amber)">0</div><div class="stat-lbl">Minor</div></div>
+          <div class="stat"><div class="stat-val" id="s3" style="color:var(--green)">0</div><div class="stat-lbl">Active</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">// monitored sites</div>
+          <div id="sites-list"></div>
+        </div>
+      </div>
+
+      <!-- DETAIL -->
+      <div id="page-detail" style="display:none">
+        <button class="btn btn-ghost btn-sm" style="margin-bottom:18px" onclick="showPage('dash')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> BACK
+        </button>
+        <div class="dh" id="det-header"></div>
+        <div id="checking-bar-wrap" style="display:none">
+          <div class="checking-bar"><div class="checking-fill" id="check-fill"></div></div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" id="tab-diff" onclick="switchTab('diff')">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+            Latest Diff
+          </button>
+          <button class="tab" id="tab-hist" onclick="switchTab('hist')">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Version History
+          </button>
+        </div>
+        <div id="panel-diff"></div>
+        <div id="panel-hist" style="display:none"></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div id="page-settings" style="display:none">
+        <div class="pg-head">
+          <div>
+            <div class="pg-title">SETTINGS</div>
+            <div class="pg-sub">CONFIGURE · API KEY · DATA MANAGEMENT</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">// anthropic api key</div>
+          <p style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">Used for AI change classification. Stored only in your browser.</p>
+          <div style="display:flex;gap:8px">
+            <input class="fi" id="key-input" type="password" placeholder="sk-ant-api03-..." style="flex:1"/>
+            <button class="btn btn-amber" onclick="saveKeyFromSettings()">Save</button>
+          </div>
+          <div id="key-status" style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--text3)"></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">// cors proxy</div>
+          <p style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">Used to fetch external websites from the browser. Default works for most sites.</p>
+          <select class="fs" id="proxy-sel" onchange="saveProxy()">
+            <option value="https://api.allorigins.win/raw?url=">allorigins.win (default)</option>
+            <option value="https://corsproxy.io/?">corsproxy.io</option>
+            <option value="https://api.codetabs.com/v1/proxy?quest=">codetabs.com</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="card-title">// data management</div>
+          <p style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:14px">All data stored locally in your browser's localStorage.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="exportData()">📤 Export All Data</button>
+            <button class="btn btn-ghost btn-sm" onclick="importData()">📥 Import Data</button>
+            <button class="btn btn-danger btn-sm" onclick="clearAll()">🗑 Clear All Data</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div id="add-modal" class="overlay" style="display:none" onclick="bgClose(event,'add-modal')">
+  <div class="modal">
+    <div class="modal-title">ADD SITE</div>
+    <div class="modal-sub">// snapshot now · track changes · alert on major</div>
+    <div class="fg">
+      <label class="fl">Website URL *</label>
+      <input id="m-url" class="fi" type="url" placeholder="https://example.com"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Display Name</label>
+      <input id="m-name" class="fi" type="text" placeholder="Competitor Homepage"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Check Interval</label>
+      <select id="m-interval" class="fs">
+        <option value="5">Every 5 minutes</option>
+        <option value="15">Every 15 minutes</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="60" selected>Every hour</option>
+        <option value="360">Every 6 hours</option>
+        <option value="720">Every 12 hours</option>
+        <option value="1440">Every day</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeAdd()">Cancel</button>
+      <button class="btn btn-amber" id="add-btn" onclick="doAddSite()">+ START MONITORING</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="import-file" accept=".json" style="display:none" onchange="doImport(event)"/>
+
+<script>
+'use strict';
+// ── STORAGE KEYS ────────────────────────────────────────────────────
+const K = {
+  sites:    'ww_sites',
+  snaps:    'ww_snaps',
+  apikey:   'ww_apikey',
+  proxy:    'ww_proxy',
+  setup:    'ww_setup_done',
+};
+
+// ── STATE ───────────────────────────────────────────────────────────
+let sites   = [];
+let snaps   = {};  // { siteId: [ ...snapshots ] }
+let curSite = null;
+let histFilter = 'all';
+const PROXY_DEFAULT = 'https://api.allorigins.win/raw?url=';
+const PROXY_FALLBACKS = [
+  'https://api.allorigins.win/raw?url=',
+  'https://corsproxy.io/?',
+  'https://api.codetabs.com/v1/proxy?quest=',
+  'https://thingproxy.freeboard.io/fetch/'
+];
+
+// ── INIT ────────────────────────────────────────────────────────────
+function init() {
+  sites = JSON.parse(localStorage.getItem(K.sites) || '[]');
+  snaps = JSON.parse(localStorage.getItem(K.snaps) || '{}');
+  const setupDone = localStorage.getItem(K.setup);
+  if (!setupDone) {
+    document.getElementById('setup-page').style.display = 'block';
+  } else {
+    startApp();
+  }
+  // restore proxy
+  const proxyEl = document.getElementById('proxy-sel');
+  const saved = localStorage.getItem(K.proxy) || PROXY_DEFAULT;
+  if (proxyEl) {
+    [...proxyEl.options].forEach(o => { if (o.value === saved) o.selected = true; });
+  }
+}
+
+function startApp() {
+  document.getElementById('setup-page').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadDash();
+  // update key status
+  const key = localStorage.getItem(K.apikey)||'';
+  const ks = document.getElementById('key-status');
+  if (ks) ks.textContent = key ? '✓ API key saved (' + key.slice(0,12) + '...)' : 'No API key — using rule-based classification';
+  const ki = document.getElementById('key-input');
+  if (ki && key) ki.value = key;
+}
+
+// ── SETUP ───────────────────────────────────────────────────────────
+function saveApiKey() {
+  const key = document.getElementById('setup-key').value.trim();
+  if (key) localStorage.setItem(K.apikey, key);
+  localStorage.setItem(K.setup, '1');
+  startApp();
+  toast('Ready! API key saved.', 'ok');
+}
+function skipSetup() {
+  localStorage.setItem(K.setup, '1');
+  startApp();
+  toast('Running without API key — rule-based mode.', 'info');
+}
+
+// ── PAGES ───────────────────────────────────────────────────────────
+function showPage(name) {
+  ['dash','detail','settings'].forEach(p => {
+    document.getElementById('page-' + p).style.display = p === name ? '' : 'none';
+  });
+  ['nav-dash','nav-settings'].forEach(n => {
+    const el = document.getElementById(n);
+    if (el) el.className = 'nav-item' + (n === 'nav-' + name ? ' active' : '');
+  });
+  if (name === 'dash') loadDash();
+}
+
+// ── DASHBOARD ───────────────────────────────────────────────────────
+function loadDash() {
+  const total  = sites.length;
+  const major  = sites.filter(s => s.lastChange === 'major').length;
+  const minor  = sites.filter(s => s.lastChange === 'minor').length;
+  const active = sites.filter(s => s.status === 'active').length;
+  document.getElementById('s0').textContent = total;
+  document.getElementById('s1').textContent = major;
+  document.getElementById('s2').textContent = minor;
+  document.getElementById('s3').textContent = active;
+  document.getElementById('dash-sub').textContent =
+    '// monitoring ' + total + ' site' + (total !== 1 ? 's' : '') + ' · ' + active + ' active';
+  renderSites();
+}
+
+function renderSites() {
+  const el = document.getElementById('sites-list');
+  if (!sites.length) {
+    el.innerHTML = `<div class="empty">
+      <div class="empty-glyph">∅</div>
+      <h3>No sites monitored</h3>
+      <p>Click "ADD SITE" to start tracking a website</p>
+      <button class="btn btn-amber" style="margin-top:18px" onclick="openAdd()">+ ADD FIRST SITE</button>
+    </div>`;
+    return;
+  }
+  const dc = {major:'var(--red)',minor:'var(--amber)',none:'var(--green)'};
+  el.innerHTML = sites.map(s => `
+    <div class="site-row" onclick='openDetail(${s.id})'>
+      <span class="site-dot" style="background:${dc[s.lastChange]||'var(--text3)'}"></span>
+      <div class="site-info">
+        <div class="site-name">${esc(s.name)}</div>
+        <div class="site-url">${esc(s.url)}</div>
+        <div class="site-meta">
+          ${s.lastChecked ? '⟳ ' + ago(s.lastChecked) + ' ago' : 'Never checked'}
+          &nbsp;·&nbsp; every ${s.interval}m
+        </div>
+      </div>
+      <span class="badge badge-${s.lastChange||'none'}">${s.lastChange||'none'}</span>
+      <span class="badge badge-${s.status}">${s.status}</span>
+      <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm" onclick="checkNow(${s.id})" title="Check now">⟳</button>
+        <button class="btn btn-ghost btn-sm" onclick="togglePause(${s.id})">${s.status==='active'?'⏸':'▶'}</button>
+      </div>
+      <svg width="12" height="12" fill="none" stroke="var(--text3)" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`).join('');
+}
+
+// ── ADD SITE ────────────────────────────────────────────────────────
+function openAdd() { document.getElementById('add-modal').style.display = 'flex'; document.getElementById('m-url').focus(); }
+function closeAdd() { document.getElementById('add-modal').style.display = 'none'; }
+function bgClose(e, id) { if (e.target.id === id) { if (id==='add-modal') closeAdd(); } }
+
+async function doAddSite() {
+  const url      = (document.getElementById('m-url').value || '').trim();
+  const name     = (document.getElementById('m-name').value || '').trim();
+  const interval = parseInt(document.getElementById('m-interval').value) || 60;
+  if (!url.startsWith('http')) { toast('URL must start with http:// or https://', 'err'); return; }
+  if (sites.find(s => s.url === url)) { toast('This URL is already monitored.', 'err'); return; }
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Fetching...';
+
+  const id = Date.now();
+  const site = { id, url, name: name || url, interval, status: 'active', lastChange: 'none', lastChecked: null };
+
+  try {
+    const { text, hash } = await fetchPage(url);
+    const snap = { id: Date.now(), siteId: id, content: text, hash, changeType:'none', changePct:0, summary:'Initial snapshot captured.', added:0, removed:0, ts: new Date().toISOString() };
+    site.lastChecked = snap.ts;
+    sites.push(site);
+    snaps[id] = [snap];
+    persist();
+    closeAdd();
+    document.getElementById('m-url').value = '';
+    document.getElementById('m-name').value = '';
+    loadDash();
+    toast('✓ Site added & first snapshot taken!', 'ok');
+  } catch(e) {
+    toast('Failed to fetch: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '+ START MONITORING';
+  }
+}
+
+// ── DETAIL PAGE ─────────────────────────────────────────────────────
+function openDetail(siteId) {
+  curSite = sites.find(s => s.id === siteId);
+  if (!curSite) return;
+  showPage('detail');
+  renderDetHeader();
+  loadDiffPanel();
+  switchTab('diff');
+}
+
+function renderDetHeader() {
+  const s = curSite;
+  const dc = {major:'var(--red)',minor:'var(--amber)',none:'var(--green)'};
+  document.getElementById('det-header').innerHTML = `
+    <div class="dh-icon">🌐</div>
+    <div class="dh-info">
+      <div class="dh-name">${esc(s.name)}</div>
+      <a href="${esc(s.url)}" target="_blank" rel="noopener" class="dh-url">${esc(s.url)} ↗</a>
+      <div class="dh-meta">
+        <div class="dh-meta-item"><label>Status</label><span class="badge badge-${s.status}">${s.status}</span></div>
+        <div class="dh-meta-item"><label>Last Change</label><span class="badge badge-${s.lastChange||'none'}">${s.lastChange||'none'}</span></div>
+        <div class="dh-meta-item"><label>Last Checked</label><span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${s.lastChecked ? ago(s.lastChecked) + ' ago' : 'Never'}</span></div>
+        <div class="dh-meta-item"><label>Interval</label><span style="font-size:11px;font-family:var(--mono);color:var(--text2)">Every ${s.interval}m</span></div>
+        <div class="dh-meta-item"><label>Snapshots</label><span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${(snaps[s.id]||[]).length}</span></div>
+      </div>
+    </div>
+    <div class="dh-acts">
+      <button class="btn btn-ghost btn-sm" id="check-now-btn" onclick="checkNow(${s.id}, true)">⟳ CHECK NOW</button>
+      <button class="btn btn-ghost btn-sm" onclick="togglePause(${s.id})">${s.status==='active'?'⏸ PAUSE':'▶ RESUME'}</button>
+      <button class="btn btn-danger btn-sm" onclick="delSite(${s.id})">✕ DELETE</button>
+    </div>`;
+}
+
+function switchTab(name) {
+  document.getElementById('panel-diff').style.display = name==='diff' ? '' : 'none';
+  document.getElementById('panel-hist').style.display = name==='hist' ? '' : 'none';
+  document.getElementById('tab-diff').className = 'tab' + (name==='diff' ? ' active' : '');
+  document.getElementById('tab-hist').className = 'tab' + (name==='hist' ? ' active' : '');
+  if (name === 'hist') renderHistory();
+}
+
+// ── DIFF PANEL ──────────────────────────────────────────────────────
+function loadDiffPanel() {
+  const panel = document.getElementById('panel-diff');
+  const siteSnaps = snaps[curSite.id] || [];
+  const snapOpts = siteSnaps.map(s =>
+    `<option value="${s.id}">#${s.id.toString().slice(-4)} · ${fmtDate(s.ts)} · ${s.changeType}</option>`
+  ).join('');
+
+  panel.innerHTML = `
+    <div class="cmp-bar">
+      <select class="fs" id="cmp-a" style="flex:1"><option value="">— Snapshot A (older) —</option>${snapOpts}</select>
+      <span style="color:var(--text3);font-size:18px">→</span>
+      <select class="fs" id="cmp-b" style="flex:1"><option value="">— Snapshot B (newer) —</option>${snapOpts}</select>
+      <button class="btn btn-ghost btn-sm" onclick="runCompare()">⇄ COMPARE</button>
+      <button class="btn btn-ghost btn-sm" onclick="showLatestDiff()">LATEST</button>
+    </div>
+    <div id="diff-result">${renderDiffResult(getLatestDiff())}</div>`;
+}
+
+function getLatestDiff() {
+  const ss = (snaps[curSite.id] || []).slice(0, 2);
+  if (ss.length < 2) return null;
+  const [newer, older] = ss;
+  const d = computeDiff(older.content, newer.content);
+  return {
+    changeType: newer.changeType,
+    summary: newer.summary,
+    diff: { ...d, changePct: newer.changePct, linesAdded: newer.added, linesRemoved: newer.removed }
+  };
+}
+
+function showLatestDiff() {
+  document.getElementById('diff-result').innerHTML = renderDiffResult(getLatestDiff());
+}
+
+function runCompare() {
+  const aId = parseInt(document.getElementById('cmp-a').value);
+  const bId = parseInt(document.getElementById('cmp-b').value);
+  if (!aId || !bId) { toast('Select both snapshots.', 'err'); return; }
+  const ss = snaps[curSite.id] || [];
+  const sa = ss.find(s => s.id === aId);
+  const sb = ss.find(s => s.id === bId);
+  if (!sa || !sb) { toast('Snapshots not found.', 'err'); return; }
+  const d = computeDiff(sa.content, sb.content);
+  document.getElementById('diff-result').innerHTML = renderDiffResult({
+    diff: { ...d, changePct: d.changePct, linesAdded: d.lines_added, linesRemoved: d.lines_removed }
+  });
+}
+
+function renderDiffResult(data) {
+  if (!data || !data.diff) return `<div class="empty">
+    <div class="empty-glyph">∆</div>
+    <h3>No diff yet</h3>
+    <p>Click "CHECK NOW" · wait · click again to generate a diff</p>
+  </div>`;
+  const d = data.diff;
+  const pc = d.changePct ?? d.change_percent ?? 0;
+  const la = d.linesAdded ?? d.lines_added ?? 0;
+  const lr = d.linesRemoved ?? d.lines_removed ?? 0;
+  const pcc = pc >= 20 ? 'var(--red)' : pc >= 5 ? 'var(--amber)' : 'var(--green)';
+  const blocks = (d.blocks || []).map(b => {
+    const lbl = {replace:'~ CHANGED',insert:'+ INSERTED',delete:'− DELETED'};
+    const clr = {replace:'var(--amber)',insert:'var(--green)',delete:'var(--red)'};
+    const old = (b.old||[]).map(l => `<div class="diff-line diff-del">${esc(l)}</div>`).join('');
+    const nw  = (b.new||[]).map(l => `<div class="diff-line diff-add">${esc(l)}</div>`).join('');
+    return `<div class="diff-block">
+      <div class="diff-hdr" style="color:${clr[b.type]}">${lbl[b.type]||b.type}</div>
+      ${old}${nw}
+    </div>`;
+  }).join('');
+  return `
+    <div class="diff-stats">
+      <div class="diff-stat"><div class="diff-stat-val" style="color:var(--green)">+${la}</div><div class="diff-stat-lbl">Added</div></div>
+      <div class="diff-stat"><div class="diff-stat-val" style="color:var(--red)">−${lr}</div><div class="diff-stat-lbl">Removed</div></div>
+      <div class="diff-stat"><div class="diff-stat-val" style="color:${pcc}">${pc}%</div><div class="diff-stat-lbl">Changed</div></div>
+      ${data.changeType ? `<div class="diff-stat"><div class="diff-stat-val" style="font-size:18px;color:${data.changeType==='major'?'var(--red)':'var(--amber)'}">${data.changeType.toUpperCase()}</div><div class="diff-stat-lbl">AI Class.</div></div>` : ''}
+    </div>
+    ${data.summary ? `<div class="ai-box"><div class="ai-lbl">⬡ AI Analysis</div><div class="ai-text">${esc(data.summary)}</div></div>` : ''}
+    ${blocks ? `<div class="card"><div class="card-title">// change blocks (${(d.blocks||[]).length})</div>${blocks}</div>`
+             : `<div class="empty" style="padding:40px"><div class="empty-glyph" style="font-size:50px">✓</div><h3>No visible differences</h3><p>Content hash changed but text is identical (JS-rendered site?)</p></div>`}
+  `;
+}
+
+// ── HISTORY ─────────────────────────────────────────────────────────
+function renderHistory() {
+  const panel = document.getElementById('panel-hist');
+  const ss = snaps[curSite.id] || [];
+  const counts = { all:ss.length, major:ss.filter(s=>s.changeType==='major').length, minor:ss.filter(s=>s.changeType==='minor').length, none:ss.filter(s=>s.changeType==='none').length };
+  const filt = histFilter === 'all' ? ss : ss.filter(s => s.changeType === histFilter);
+  const dc = {major:'var(--red)',minor:'var(--amber)',none:'var(--green)'};
+  const pcc = p => p>=20?'var(--red)':p>=5?'var(--amber)':'var(--green)';
+
+  const chips = ['all','major','minor','none'].map(f =>
+    `<span class="chip${histFilter===f?' active':''}" onclick="setFilter('${f}')">${f} (${counts[f]})</span>`
+  ).join('');
+
+  const items = filt.map(s => {
+    const bar = s.changeType !== 'none' ? `
+      <div class="pct-bar">
+        <div class="pct-track"><div class="pct-fill" style="width:${Math.min(s.changePct,100)}%;background:${pcc(s.changePct)}"></div></div>
+        <span class="pct-num" style="color:${pcc(s.changePct)}">${s.changePct}%</span>
+      </div>` : '';
+    return `<div class="tl-item">
+      <div class="tl-dot" style="background:${dc[s.changeType]||'var(--text3)'}"></div>
+      <div class="tl-body">
+        <div class="tl-meta">
+          <span class="badge badge-${s.changeType}">${s.changeType}</span>
+          <span class="tl-time">${fmtDate(s.ts)}</span>
+          <span class="tl-time" style="margin-left:auto">${ago(s.ts)} ago</span>
+        </div>
+        ${bar}
+        ${s.summary && s.changeType!=='none' ? `<div class="tl-sum">${esc(s.summary)}</div>` : ''}
+        ${s.changeType!=='none' ? `<div class="tl-nums">
+          ${s.added>0?`<span style="color:var(--green)">+${s.added} added</span>`:''}
+          ${s.removed>0?`<span style="color:var(--red)">−${s.removed} removed</span>`:''}
+          <span style="margin-left:auto;color:var(--text3)">${(s.hash||'').slice(0,8)}…</span>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="chips">${chips}</div>
+    <div class="card">
+      <div class="card-title">// snapshot timeline — ${filt.length} entries</div>
+      ${filt.length ? items : `<div class="empty" style="padding:40px"><div class="empty-glyph" style="font-size:50px">⊘</div><h3>No entries</h3></div>`}
+    </div>`;
+}
+
+function setFilter(f) { histFilter = f; renderHistory(); }
+
+// ── CHECK NOW ───────────────────────────────────────────────────────
+async function checkNow(siteId, fromDetail = false) {
+  const site = sites.find(s => s.id === siteId);
+  if (!site || site.status === 'paused') { toast('Site is paused.', 'info'); return; }
+
+  if (fromDetail) {
+    const btn = document.getElementById('check-now-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Checking...'; }
+    const wrap = document.getElementById('checking-bar-wrap');
+    if (wrap) { wrap.style.display = ''; progressBar(0); }
+  } else {
+    toast('Checking ' + site.name + '...', 'info');
+  }
+
+  try {
+    if (fromDetail) progressBar(30);
+    const { text, hash } = await fetchPage(site.url);
+    if (fromDetail) progressBar(60);
+
+    const existing = snaps[siteId] || [];
+    const last = existing[0];
+
+    if (last && last.hash === hash) {
+      site.lastChecked = new Date().toISOString();
+      persist();
+      if (fromDetail) { progressBar(100); setTimeout(() => { document.getElementById('checking-bar-wrap').style.display='none'; }, 600); renderDetHeader(); }
+      toast('No changes detected on ' + site.name, 'info');
+      return;
+    }
+
+    // Compute diff
+    const diff = last ? computeDiff(last.content, text) : { lines_added:0, lines_removed:0, change_percent:0, blocks:[] };
+    const changePct = diff.change_percent || 0;
+
+    if (fromDetail) progressBar(80);
+
+    // Classify
+    let changeType = 'none', summary = 'Initial snapshot captured.';
+    if (last) {
+      ({ changeType, summary } = await classifyChange(site.url, diff, changePct));
+    }
+
+    const snap = {
+      id: Date.now(), siteId, content: text, hash,
+      changeType, changePct, summary,
+      added: diff.lines_added || 0,
+      removed: diff.lines_removed || 0,
+      ts: new Date().toISOString(),
+    };
+
+    site.lastChecked = snap.ts;
+    site.lastChange = changeType;
+
+    if (!snaps[siteId]) snaps[siteId] = [];
+    snaps[siteId].unshift(snap);
+    // Keep max 30 snapshots per site
+    if (snaps[siteId].length > 30) snaps[siteId] = snaps[siteId].slice(0, 30);
+
+    persist();
+
+    if (fromDetail) {
+      progressBar(100);
+      setTimeout(() => { document.getElementById('checking-bar-wrap').style.display='none'; }, 600);
+      renderDetHeader();
+      loadDiffPanel();
+    } else {
+      loadDash();
+    }
+
+    const msg = last ? (changeType === 'major' ? '⚠ MAJOR change on ' + site.name : changeType === 'minor' ? 'Minor change on ' + site.name : 'No change on ' + site.name) : 'First snapshot saved for ' + site.name;
+    toast(msg, changeType === 'major' ? 'err' : 'ok');
+
+  } catch(e) {
+    toast('Fetch failed: ' + e.message, 'err');
+    if (fromDetail) {
+      const wrap = document.getElementById('checking-bar-wrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+  } finally {
+    if (fromDetail) {
+      const btn = document.getElementById('check-now-btn');
+      if (btn) { btn.disabled = false; btn.innerHTML = '⟳ CHECK NOW'; }
+    }
+  }
+}
+
+function progressBar(pct) {
+  const el = document.getElementById('check-fill');
+  if (el) el.style.width = pct + '%';
+}
+
+// ── ACTIONS ─────────────────────────────────────────────────────────
+function togglePause(siteId) {
+  const site = sites.find(s => s.id === siteId);
+  if (!site) return;
+  site.status = site.status === 'active' ? 'paused' : 'active';
+  persist();
+  if (curSite && curSite.id === siteId) { curSite = site; renderDetHeader(); }
+  loadDash();
+  toast('Site ' + site.status + '.', 'info');
+}
+
+function delSite(siteId) {
+  if (!confirm('Delete this site and all its snapshots?')) return;
+  sites = sites.filter(s => s.id !== siteId);
+  delete snaps[siteId];
+  persist();
+  toast('Site deleted.', 'ok');
+  showPage('dash');
+}
+
+// ── SETTINGS ────────────────────────────────────────────────────────
+function saveKeyFromSettings() {
+  const key = document.getElementById('key-input').value.trim();
+  if (key) { localStorage.setItem(K.apikey, key); toast('API key saved!', 'ok'); }
+  else { localStorage.removeItem(K.apikey); toast('API key cleared.', 'info'); }
+  const ks = document.getElementById('key-status');
+  if (ks) ks.textContent = key ? '✓ Saved: ' + key.slice(0,12) + '...' : 'No key — rule-based mode.';
+}
+
+function saveProxy() {
+  const val = document.getElementById('proxy-sel').value;
+  localStorage.setItem(K.proxy, val);
+  toast('Proxy updated.', 'ok');
+}
+
+function exportData() {
+  const data = JSON.stringify({ sites, snaps }, null, 2);
+  const blob = new Blob([data], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'webwatch-export-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  toast('Data exported!', 'ok');
+}
+
+function importData() { document.getElementById('import-file').click(); }
+
+function doImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.sites) sites = data.sites;
+      if (data.snaps) snaps = data.snaps;
+      persist();
+      loadDash();
+      toast('Data imported!', 'ok');
+    } catch { toast('Invalid JSON file.', 'err'); }
+  };
+  reader.readAsText(file);
+}
+
+function clearAll() {
+  if (!confirm('Delete ALL sites and snapshots? This cannot be undone.')) return;
+  sites = []; snaps = {};
+  persist();
+  loadDash();
+  toast('All data cleared.', 'info');
+}
+
+// ── CORE: FETCH PAGE ────────────────────────────────────────────────
+async function fetchPage(url) {
+  const savedProxy = localStorage.getItem(K.proxy);
+  const proxies = savedProxy ? [savedProxy, ...PROXY_FALLBACKS.filter(p => p !== savedProxy)] : [...PROXY_FALLBACKS];
+  let lastError = null;
+
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy + encodeURIComponent(url));
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + proxy);
+      const html = await res.text();
+      const text = extractText(html);
+      const hash = await md5(text);
+      return { text, hash };
+    } catch (err) {
+      lastError = err;
+      console.warn('Proxy fetch failed:', proxy, err);
+      // try the next proxy
+    }
+  }
+
+  throw new Error('All proxy fetch attempts failed. Last error: ' + (lastError ? lastError.message : 'unknown'));
+}
+
+function extractText(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  // Remove noise
+  ['script','style','nav','footer','head','noscript','iframe','svg'].forEach(tag => {
+    doc.querySelectorAll(tag).forEach(el => el.remove());
+  });
+  const text = doc.body ? doc.body.innerText || doc.body.textContent || '' : '';
+  return text.split('\n').map(l => l.trim()).filter(Boolean).join('\n');
+}
+
+// Simple hash (no crypto needed for content comparison)
+async function md5(str) {
+  // Use SubtleCrypto for a proper hash
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0,32);
+  } catch {
+    // fallback simple hash
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+    return Math.abs(h).toString(16).padStart(8,'0');
+  }
+}
+
+// ── CORE: DIFF ──────────────────────────────────────────────────────
+function computeDiff(oldText, newText) {
+  const oldLines = oldText.split('\n');
+  const newLines = newText.split('\n');
+
+  // Myers diff (simplified LCS-based)
+  const lcs = buildLCS(oldLines, newLines);
+  const blocks = [];
+  let oi = 0, ni = 0, li = 0;
+  const delLines = [], addLines = [];
+
+  while (oi < oldLines.length || ni < newLines.length) {
+    if (oi < oldLines.length && ni < newLines.length && li < lcs.length && oldLines[oi] === lcs[li] && newLines[ni] === lcs[li]) {
+      oi++; ni++; li++;
+    } else {
+      const block = { type: 'replace', old: [], new: [] };
+      while (oi < oldLines.length && (li >= lcs.length || oldLines[oi] !== lcs[li])) {
+        block.old.push(oldLines[oi++]);
+        delLines.push(oldLines[oi-1]);
+      }
+      while (ni < newLines.length && (li >= lcs.length || newLines[ni] !== lcs[li])) {
+        block.new.push(newLines[ni++]);
+        addLines.push(newLines[ni-1]);
+      }
+      if (block.old.length === 0) block.type = 'insert';
+      else if (block.new.length === 0) block.type = 'delete';
+      if (block.old.length || block.new.length) blocks.push(block);
+    }
+  }
+
+  const total = Math.max(oldLines.length, 1);
+  const changePct = Math.round((addLines.length + delLines.length) / total * 100 * 10) / 10;
+
+  return {
+    added: addLines,
+    removed: delLines,
+    blocks: blocks.slice(0, 40),
+    lines_added: addLines.length,
+    lines_removed: delLines.length,
+    change_percent: Math.min(changePct, 100),
+    changePct: Math.min(changePct, 100),
+  };
+}
+
+function buildLCS(a, b) {
+  // Limit for performance
+  if (a.length > 500) a = a.slice(0, 500);
+  if (b.length > 500) b = b.slice(0, 500);
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    if (a[i-1] === b[j-1]) dp[i][j] = dp[i-1][j-1] + 1;
+    else dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+  }
+  const lcs = [];
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    if (a[i-1] === b[j-1]) { lcs.unshift(a[i-1]); i--; j--; }
+    else if (dp[i-1][j] > dp[i][j-1]) i--;
+    else j--;
+  }
+  return lcs;
+}
+
+// ── CORE: AI CLASSIFY ───────────────────────────────────────────────
+async function classifyChange(url, diff, changePct) {
+  const apiKey = localStorage.getItem(K.apikey) || '';
+
+  // Rule-based fallback
+  if (!apiKey) {
+    if (changePct >= 20) return { changeType: 'major', summary: `Large change detected (${changePct}% of content changed).` };
+    if (changePct >= 3)  return { changeType: 'minor', summary: `Small change detected (${changePct}% of content changed).` };
+    return { changeType: 'none', summary: 'Minimal change.' };
+  }
+
+  const addedSample   = (diff.added  || []).slice(0,15).join('\n');
+  const removedSample = (diff.removed || []).slice(0,15).join('\n');
+
+  const prompt = `You are a website change classifier for a competitive intelligence tool.
+
+URL: ${url}
+Changed: ${changePct}%
+Lines added: ${diff.lines_added}
+Lines removed: ${diff.lines_removed}
+
+Added content:
+${addedSample || '(none)'}
+
+Removed content:
+${removedSample || '(none)'}
+
+MAJOR = pricing changes, product launches, policy updates, contact info changes, >15% shift.
+MINOR = typo fixes, date updates, minor wording, <5% shift.
+
+Respond ONLY with valid JSON, no markdown:
+{"type":"MAJOR or MINOR","reason":"one clear sentence"}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 150,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const txt = data.content?.[0]?.text?.trim() || '';
+    const parsed = JSON.parse(txt);
+    return { changeType: parsed.type.toLowerCase(), summary: parsed.reason };
+  } catch(e) {
+    const t = changePct >= 20 ? 'major' : 'minor';
+    return { changeType: t, summary: `Auto-classified (${changePct}% changed). AI error: ${e.message}` };
+  }
+}
+
+// ── PERSIST ─────────────────────────────────────────────────────────
+function persist() {
+  try {
+    localStorage.setItem(K.sites, JSON.stringify(sites));
+    localStorage.setItem(K.snaps, JSON.stringify(snaps));
+  } catch(e) {
+    toast('Storage full! Export and clear old data.', 'err');
+  }
+}
+
+// ── UTILS ───────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function ago(ts) {
+  if (!ts) return '?';
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (s < 60)    return s + 's';
+  if (s < 3600)  return Math.floor(s/60) + 'm';
+  if (s < 86400) return Math.floor(s/3600) + 'h';
+  return Math.floor(s/86400) + 'd';
+}
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en',{month:'short',day:'numeric'}) + ' ' +
+         d.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',hour12:false});
+}
+
+// ── TOAST ───────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toasts');
+  const el = document.createElement('div');
+  const cls = {ok:'t-ok',err:'t-err',info:'t-info'};
+  el.className = 'toast ' + (cls[type]||'t-info');
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── KEYBOARD ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAdd();
+  if ((e.ctrlKey||e.metaKey) && e.key === 'k') { e.preventDefault(); openAdd(); }
+});
+
+// ── AUTO-REFRESH (when tab is open) ─────────────────────────────────
+// Checks sites that are due based on their interval
+async function autoCheck() {
+  const now = Date.now();
+  for (const site of sites) {
+    if (site.status !== 'active') continue;
+    const lastMs = site.lastChecked ? new Date(site.lastChecked).getTime() : 0;
+    const intervalMs = (site.interval || 60) * 60 * 1000;
+    if (now - lastMs >= intervalMs) {
+      await checkNow(site.id, false);
+      await new Promise(r => setTimeout(r, 2000)); // space out requests
+    }
+  }
+}
+
+// Run auto-check every 2 minutes
+setInterval(autoCheck, 2 * 60 * 1000);
+
+// ── BOOT ────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
